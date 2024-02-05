@@ -1,9 +1,7 @@
-import logging
-from struct import calcsize, pack, unpack
-
-from ldap_shell.utils import b
-
-log = logging.getLogger('ldap-shell.internal')
+from __future__ import division
+from __future__ import print_function
+from struct import pack, unpack, calcsize
+from six import b, PY3
 
 
 class Structure:
@@ -95,7 +93,8 @@ class Structure:
         self.data = data
 
     def packField(self, fieldName, format=None):
-        log.debug("packField( %s | %s )", fieldName, format)
+        if self.debug:
+            print("packField( %s | %s )" % (fieldName, format))
 
         if format is None:
             format = self.formatForField(fieldName)
@@ -106,7 +105,7 @@ class Structure:
             ans = self.pack(format, None, field=fieldName)
 
         if self.debug:
-            log.debug("answer %r", ans)
+            print("\tanswer %r" % ans)
 
         return ans
 
@@ -120,8 +119,7 @@ class Structure:
             except Exception as e:
                 if field[0] in self.fields:
                     e.args += (
-                        "When packing field '%s | %s | %r' in %s" % (
-                            field[0], field[1], self[field[0]], self.__class__),)
+                    "When packing field '%s | %s | %r' in %s" % (field[0], field[1], self[field[0]], self.__class__),)
                 else:
                     e.args += ("When packing field '%s | %s' in %s" % (field[0], field[1], self.__class__),)
                 raise
@@ -135,11 +133,11 @@ class Structure:
     def fromString(self, data):
         self.rawData = data
         for field in self.commonHdr + self.structure:
-
-            log.debug("fromString( %s | %s | %r )", field[0], field[1], data)
+            if self.debug:
+                print("fromString( %s | %s | %r )" % (field[0], field[1], data))
             size = self.calcUnpackSize(field[1], data, field[0])
             if self.debug:
-                log.debug("size = %d", size)
+                print("  size = %d" % size)
             dataClassOrCode = b
             if len(field) > 2:
                 dataClassOrCode = field[2]
@@ -174,8 +172,8 @@ class Structure:
         return len(self.getData())
 
     def pack(self, format, data, field=None):
-
-        log.debug("pack( %s | %r | %s)", format, data, field)
+        if self.debug:
+            print("  pack( %s | %r | %s)" % (format, data, field))
 
         if field:
             addressField = self.findAddressFieldFor(field)
@@ -286,7 +284,7 @@ class Structure:
 
     def unpack(self, format, data, dataClassOrCode=b, field=None):
         if self.debug:
-            log.debug("unpack( %s | %r )", format, data)
+            print("  unpack( %s | %r )" % (format, data))
 
         if field:
             addressField = self.findAddressFieldFor(field)
@@ -354,7 +352,10 @@ class Structure:
         if format == 'z':
             if data[-1:] != b('\x00'):
                 raise Exception("%s 'z' field is not NUL terminated: %r" % (field, data))
-            return data[:-1].decode('latin-1')
+            if PY3:
+                return data[:-1].decode('latin-1')
+            else:
+                return data[:-1]
 
         # unicode specifier
         if format == 'u':
@@ -448,7 +449,8 @@ class Structure:
         return calcsize(format)
 
     def calcUnpackSize(self, format, data, field=None):
-        log.debug("calcUnpackSize( %s | %s | %r)", field, format, data)
+        if self.debug:
+            print("  calcUnpackSize( %s | %s | %r)" % (field, format, data))
 
         # void specifier
         if format[:1] == '_':
@@ -603,3 +605,37 @@ class Structure:
                 print("%s}" % ind)
             else:
                 print("%s%s: {%r}" % (ind, i, self[i]))
+
+class MSDS_MANAGEDPASSWORD_BLOB(Structure):
+    structure = (
+        ('Version','<H'),
+        ('Reserved','<H'),
+        ('Length','<L'),
+        ('CurrentPasswordOffset','<H'),
+        ('PreviousPasswordOffset','<H'),
+        ('QueryPasswordIntervalOffset','<H'),
+        ('UnchangedPasswordIntervalOffset','<H'),
+        ('CurrentPassword',':'),
+        ('PreviousPassword',':'),
+        #('AlignmentPadding',':'),
+        ('QueryPasswordInterval',':'),
+        ('UnchangedPasswordInterval',':'),
+    )
+
+    def __init__(self, data = None):
+        Structure.__init__(self, data = data)
+
+    def fromString(self, data):
+        Structure.fromString(self,data)
+
+        if self['PreviousPasswordOffset'] == 0:
+            endData = self['QueryPasswordIntervalOffset']
+        else:
+            endData = self['PreviousPasswordOffset']
+
+        self['CurrentPassword'] = self.rawData[self['CurrentPasswordOffset']:][:endData - self['CurrentPasswordOffset']]
+        if self['PreviousPasswordOffset'] != 0:
+            self['PreviousPassword'] = self.rawData[self['PreviousPasswordOffset']:][:self['QueryPasswordIntervalOffset']-self['PreviousPasswordOffset']]
+
+        self['QueryPasswordInterval'] = self.rawData[self['QueryPasswordIntervalOffset']:][:self['UnchangedPasswordIntervalOffset']-self['QueryPasswordIntervalOffset']]
+        self['UnchangedPasswordInterval'] = self.rawData[self['UnchangedPasswordIntervalOffset']:]
