@@ -125,7 +125,7 @@ class Prompt:
 	def __init__(self, domain_dumper, client, noninteractive=False):
 		self.domain_dumper = domain_dumper
 		self.client = client
-		self.prompt = '# '
+		self.prompt = f'{self.client.user.split("\\")[1]}# '
 		self.history = history
 		self.identchars = string.ascii_letters + string.digits + '_'
 		self.noninteractive = noninteractive
