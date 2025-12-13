@@ -4,6 +4,7 @@ from struct import pack, unpack
 import logging
 from ldap_shell.utils.ldaptypes import SR_SECURITY_DESCRIPTOR, LDAP_SID, ACL
 from ldap3.protocol.microsoft import security_descriptor_control
+from ldap3.utils.conv import escape_filter_chars
 
 class LdapUtils:
     @staticmethod
@@ -67,17 +68,62 @@ class LdapUtils:
         return re.sub(',DC=', '.', dn[dn.find('DC='):], flags=re.I)[3:]
 
     @staticmethod
-    def get_info_by_dn(client, domain_dumper, dn: str) -> Optional[tuple[bytes, str]]:
+    def get_info_by_dn(client, domain_dumper, dn: str) -> Optional[tuple]:
         """Get info by DN"""
-        client.search(
-            domain_dumper.root,
-            f'(distinguishedName={dn})',
-            attributes=['nTSecurityDescriptor', 'objectSid'],
-            controls=security_descriptor_control(sdflags=0x04)
-        )
-        if len(client.entries) > 0:
-            return client.entries[0]['nTSecurityDescriptor'].raw_values, client.entries[0]['objectSid'].value
-        return None
+        try:
+            client.search(
+                domain_dumper.root,
+                f'(distinguishedName={escape_filter_chars(dn)})',
+                attributes=['nTSecurityDescriptor', 'objectSid'],
+                controls=security_descriptor_control(sdflags=0x04)
+            )
+            
+            if len(client.entries) == 0:
+                return None
+            
+            entry = client.entries[0]
+            
+            # Get security descriptor
+            sd_data = None
+            if 'nTSecurityDescriptor' in entry:
+                sd_attr = entry['nTSecurityDescriptor']
+                try:
+                    # Try raw_values first (this is a list of bytes)
+                    if hasattr(sd_attr, 'raw_values'):
+                        raw_vals = sd_attr.raw_values
+                        if raw_vals is not None:
+                            # raw_values is a list, check if it has elements
+                            if isinstance(raw_vals, (list, tuple)):
+                                if len(raw_vals) > 0:
+                                    sd_data = raw_vals
+                            else:
+                                # Not a list, treat as single value
+                                sd_data = [raw_vals] if raw_vals else None
+                    
+                    # Fallback to value attribute
+                    if not sd_data and hasattr(sd_attr, 'value'):
+                        val = sd_attr.value
+                        if val is not None:
+                            if isinstance(val, (list, tuple)):
+                                sd_data = val if len(val) > 0 else None
+                            else:
+                                sd_data = [val]
+                except (KeyError, IndexError, AttributeError, TypeError) as e:
+                    # If we can't get the data, return None
+                    sd_data = None
+            
+            # Get SID
+            sid = None
+            if 'objectSid' in entry:
+                try:
+                    sid = entry['objectSid'].value
+                except (KeyError, AttributeError):
+                    sid = None
+            
+            return sd_data, sid
+        except Exception as e:
+            # Log error but don't fail completely
+            return None
 
     @staticmethod
     def get_name_from_dn(dn: str) -> Optional[str]:

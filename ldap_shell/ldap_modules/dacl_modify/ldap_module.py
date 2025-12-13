@@ -81,12 +81,16 @@ class LdapShellModule(BaseLdapModule):
         }
 
     def __call__(self):
-        # Get target DN
-        if not LdapUtils.check_dn(self.client, self.domain_dumper, self.args.target):
-            self.log.error(f'Invalid DN: {self.args.target}')
-            return
-        else:
+        # Get target DN - support both DN and sAMAccountName
+        if LdapUtils.check_dn(self.client, self.domain_dumper, self.args.target):
             target_dn = self.args.target
+        else:
+            # Try to resolve sAMAccountName to DN
+            target_dn = LdapUtils.get_dn(self.client, self.domain_dumper, self.args.target)
+            if not target_dn:
+                self.log.error(f'Target not found: {self.args.target}')
+                self.log.info('Tip: Provide DN or sAMAccountName')
+                return
 
         # Get grantee information
         grantee_sid = LdapUtils.get_sid(self.client, self.domain_dumper, self.args.grantee)
@@ -144,8 +148,25 @@ class LdapShellModule(BaseLdapModule):
                 controls=ldap3.protocol.microsoft.security_descriptor_control(sdflags=0x04)
             )
         except Exception as e:
+            error_msg = str(e)
             self.log.info(f'{target_dn} {self.args.grantee} {self.args.action} {self.args.mask}')
-            self.log.error(f'Modification failed: {str(e)}')
+            self.log.error(f'Modification failed: {error_msg}')
+            
+            # Provide helpful suggestions
+            if 'insufficientAccessRights' in error_msg.lower() or 'access' in error_msg.lower():
+                self.log.warning('')
+                self.log.warning('You need rights to modify DACL on the target object.')
+                self.log.warning('Possible solutions:')
+                self.log.warning(f'1. Check your permissions on the target:')
+                self.log.warning(f'   check_permissions "{self.args.target}"')
+                self.log.warning(f'2. Check if you have WriteDacl on the target:')
+                self.log.warning(f'   check_permissions "{self.args.target}"')
+                self.log.warning(f'3. Try on your own account (if you have self-modify rights):')
+                self.log.warning(f'   check_permissions john.doe')
+                self.log.warning(f'   dacl_modify john.doe john.doe add GenericAll')
+                self.log.warning(f'4. Find objects you can modify:')
+                self.log.warning(f'   check_permissions -find-writable-groups -limit 50')
+                self.log.warning('')
             return
 
         if res:

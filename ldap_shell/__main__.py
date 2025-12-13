@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
                         help='NTLM hashes, format is LMHASH:BTHASH')
     parser.add_argument('-debug', action='store_true', help='print debug output')
     parser.add_argument('-non-interactive', action='store_true', help='non-interactive command prompt')
+    parser.add_argument('-c', '--command', action='store', metavar='COMMAND',
+                        help='Execute a single command and exit. Example: -c "get_privileges username"')
     parser.add_argument('-log-path', action='store', metavar='path', type=pathlib.Path,
                         help='save logs to specified path')
     parser.add_argument('-l', '--lootdir', action='store', type=pathlib.Path, metavar='LOOTDIR', default='.',
@@ -124,6 +126,14 @@ def start_shell(options: argparse.Namespace):
     domain_dump_config = ldapdomaindump.domainDumpConfig()
     domain_dump_config.basepath = options.lootdir
     domain_dumper = ldapdomaindump.domainDumper(client.server, client, domain_dump_config)
+
+    # If command is provided, execute it and exit
+    if options.command:
+        shell = Prompt(domain_dumper, client, noninteractive=True)
+        log.info(f'Executing command: {options.command}')
+        shell.onecmd(options.command)
+        log.info('Command executed')
+        return
 
     if options.non_interactive:
             shell = Prompt(

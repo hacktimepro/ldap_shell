@@ -9,6 +9,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from ldap_shell.completers import CompleterFactory
 from ldap_shell.utils.module_loader import ModuleLoader
 from ldap_shell.utils import history
+from ldap_shell.ldap_modules.base_module import ArgumentType
 import shlex
 
 class ModuleCompleter(Completer):
@@ -234,6 +235,10 @@ class Prompt:
 	def _parse_arg_string(self, module_name: str, arg_string: str) -> dict:
 		args_dict = {}
 		
+		# Get module arguments for name mapping
+		module_args = self.modules[module_name].get_arguments()
+		arg_names = {arg.name for arg in module_args}
+		
 		# Use shlex for proper string parsing with quotes
 		try:
 			args = shlex.split(arg_string)
@@ -242,11 +247,61 @@ class Prompt:
 			print(f"Warning: {e}")
 			args = arg_string.strip().split()
 		
-		for i, value in enumerate(args):
-			if i >= len(self.modules[module_name].get_arguments()):
-				break
-			arg_name = self.modules[module_name].get_arguments()[i].name
-			args_dict[arg_name] = value
+		i = 0
+		positional_index = 0
+		
+		while i < len(args):
+			arg = args[i]
+			
+			# Check if it's a named argument (starts with - or --)
+			if arg.startswith('-'):
+				# Remove leading dashes
+				arg_name = arg.lstrip('-').replace('-', '_')
+				
+				# Check if this argument exists in module
+				if arg_name in arg_names:
+					# Get the argument type to determine if it needs a value
+					arg_info = next((a for a in module_args if a.name == arg_name), None)
+					if arg_info:
+						# Check if it's a boolean type
+						if arg_info.arg_type == ArgumentType.BOOLEAN:
+							# Boolean flag - check if next arg is true/false, otherwise default to True
+							if i + 1 < len(args) and args[i + 1].lower() in ('true', 'false', '1', '0'):
+								args_dict[arg_name] = args[i + 1].lower() in ('true', '1')
+								i += 2
+							else:
+								# Boolean flag without value - set to True
+								args_dict[arg_name] = True
+								i += 1
+						else:
+							# Non-boolean - get next value
+							if i + 1 < len(args):
+								args_dict[arg_name] = args[i + 1]
+								i += 2
+							else:
+								# Missing value for named argument
+								args_dict[arg_name] = None
+								i += 1
+					else:
+						# Unknown named argument, skip
+						i += 1
+				else:
+					# Not a recognized named argument, treat as positional
+					if positional_index < len(module_args):
+						arg_name = module_args[positional_index].name
+						args_dict[arg_name] = arg
+						positional_index += 1
+					i += 1
+			else:
+				# Positional argument
+				if positional_index < len(module_args):
+					arg_name = module_args[positional_index].name
+					# Skip if already set by named argument
+					if arg_name not in args_dict:
+						args_dict[arg_name] = arg
+						positional_index += 1
+				i += 1
+		
 		return args_dict
 
 	def parse_module_args(self, module_name: str, arg_string: str) -> dict:

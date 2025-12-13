@@ -118,10 +118,36 @@ class LdapShellModule(BaseLdapModule):
             if result:
                 self.log.info(f'Computer {self.args.computer_name} added successfully to {computer_dn}! Password: "{password}"')
             else:
-                error_msg = self.client.result
-                self.log.error(f'Failed to add computer: {error_msg}')
+                error_msg = self.client.result.get('description', 'Unknown error') if isinstance(self.client.result, dict) else str(self.client.result)
+                error_code = self.client.result.get('result', 'N/A') if isinstance(self.client.result, dict) else 'N/A'
+                self.log.error(f'Failed to add computer: {error_msg} (code: {error_code})')
+                
+                # Provide helpful suggestions
+                if 'insufficient' in error_msg.lower() or 'access' in error_msg.lower() or error_code == 50:
+                    self.log.warning('')
+                    self.log.warning('Insufficient rights to add computer account.')
+                    self.log.warning('Required permissions:')
+                    self.log.warning('1. Create Computer Objects (CreateChild) on target container')
+                    self.log.warning('   - Default: Authenticated Users can create up to 10 computer accounts')
+                    self.log.warning('   - Or: Domain Admins, Account Operators have full rights')
+                    self.log.warning('2. Write properties on computer object (for password, SPN, etc.)')
+                    self.log.warning('')
+                    self.log.warning('Possible solutions:')
+                    self.log.warning('1. Check your permissions on target container:')
+                    self.log.warning(f'   check_permissions "CN=Computers,{self.domain_dumper.root}"')
+                    self.log.warning('2. Use elevated credentials (Domain Admins, Account Operators)')
+                    self.log.warning('3. Check if you have reached the limit (10 computers for regular users)')
+                    self.log.warning('4. Try adding to a different OU where you have rights:')
+                    self.log.warning(f'   add_computer COMPUTER01$ "Password123" "OU=CustomOU,{self.domain_dumper.root}"')
+                    self.log.warning('')
 
         except Exception as e:
-            self.log.error(f'Error adding computer: {str(e)}')
-            if 'insufficient access rights' in str(e).lower():
-                self.log.info('Try relaying with LDAPS (--use-ldaps) or use elevated credentials')
+            error_msg = str(e)
+            self.log.error(f'Error adding computer: {error_msg}')
+            if 'insufficient' in error_msg.lower() or 'access' in error_msg.lower():
+                self.log.warning('')
+                self.log.warning('Insufficient rights to add computer account.')
+                self.log.warning('Required: Create Computer Objects permission on target container')
+                self.log.warning('Default: Authenticated Users can create up to 10 computers')
+                self.log.warning('Use elevated credentials or check permissions with: check_permissions')
+                self.log.warning('')
