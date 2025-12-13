@@ -131,3 +131,7 @@ logs/*
 !.gitkeep
 .vscode/launch.json
 .vscode
+
+# Local documentation files (not tracked)
+ldap_shell/htpro.md
+TRUST_EXPLOITATION.md
