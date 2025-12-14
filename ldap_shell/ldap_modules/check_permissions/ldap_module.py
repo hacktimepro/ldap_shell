@@ -119,7 +119,7 @@ class LdapShellModule(BaseLdapModule):
             # who_am_i() может вернуть DN или формат u:DOMAIN\user
             # Парсим формат u:DOMAIN\user
             if current_user_info.startswith('u:'):
-                # Формат: u:DOMAIN\john.doe
+                # Формат: u:DOMAIN\username
                 parts = current_user_info[2:].split('\\')
                 if len(parts) == 2:
                     sam_account_name = parts[1]
