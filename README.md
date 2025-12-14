@@ -1,3 +1,18 @@
+# Новые модули:
+get_privileges — поиск привилегий Windows  
+set_privilege — назначение привилегий (с stealth mode)  
+get_asreproast — поиск уязвимых к AS-REP Roasting  
+get_trusts — перечисление трастов и поиск мисконфигов  
+add_sid_history — атака SID History  
+check_permissions — проверка прав с рекурсивной проверкой групп  
+get_delegation — поиск аккаунтов с делегированием  
+get_privileged_accounts — поиск привилегированных аккаунтов  
+#Улучшения:
+add_group — добавлена опция -find-writable-containers  
+add_computer — улучшена обработка ошибок  
+dacl_modify — поддержка sAMAccountName как цели  
+ldap_utils — улучшена обработка security descriptors
+
 # LDAP shell
 This project is a fork of ldap_shell from Impacket. It provides an interactive shell for Active Directory enumeration and manipulation via LDAP/LDAPS protocols, making it useful for both system administrators and security professionals.
 
