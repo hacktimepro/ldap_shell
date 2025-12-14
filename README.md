@@ -1,4 +1,5 @@
 # Новые модули:
+
 get_privileges — поиск привилегий Windows  
 set_privilege — назначение привилегий (с stealth mode)  
 get_asreproast — поиск уязвимых к AS-REP Roasting  
@@ -9,6 +10,7 @@ get_delegation — поиск аккаунтов с делегированием
 get_privileged_accounts — поиск привилегированных аккаунтов  
 
 #Улучшения:
+
 add_group — добавлена опция -find-writable-containers  
 add_computer — улучшена обработка ошибок  
 dacl_modify — поддержка sAMAccountName как цели  
